@@ -11,11 +11,21 @@ export const INITIAL_STATE = {
       colour: "green",
     },
     step3: {
-      x: 400,
-      y: 50,
+      x: 450,
+      y: 90,
       colour: "blue",
+    },
+    step4: {
+      x: 800,
+      y: 50,
+      colour: "violet",
+    },
+    step5: {
+      x: 400,
+      y: 500,
+      colour: "pink",
     },
   },
 };
 
-export const SIZE = 50;
+export const SIZE = 120;

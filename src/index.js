@@ -5,6 +5,7 @@ import { INITIAL_STATE, SIZE } from "./config";
 import { Border } from "./Border";
 
 function createConnectionPoints(source, destination) {
+  console.log({ source, destination });
   return [source.x, source.y, destination.x, destination.y];
 }
 
@@ -21,6 +22,7 @@ function detectConnection(position, id, steps) {
   const intersectingStep = Object.keys(steps).find((key) => {
     return key !== id && hasIntersection(position, steps[key]);
   });
+  console.log({ intersectingStep });
   if (intersectingStep) {
     return intersectingStep;
   }
@@ -32,6 +34,8 @@ const App = () => {
   const [connectionPreview, setConnectionPreview] = useState(null);
   const [connections, setConnections] = useState([]);
   const [steps, setSteps] = useState(INITIAL_STATE.steps);
+  const dragUrl = React.useRef();
+  const stageRef = React.useRef();
 
   function handleSelection(id) {
     if (selectedStep === id) {
@@ -130,13 +134,14 @@ const App = () => {
       y: toStep.y - fromStep.y,
     };
     const points = createConnectionPoints({ x: 0, y: 0 }, lineEnd);
+    console.log({ points });
     return (
       <Arrow
         x={fromStep.x + SIZE / 2}
         y={fromStep.y + SIZE / 2}
         points={points}
         stroke="black"
-        strokeWidth={5}
+        strokeWidth={3}
       />
     );
   });
@@ -151,15 +156,29 @@ const App = () => {
       />
     ) : null;
   return (
-    <Stage width={window.innerWidth} height={400}>
-      <Layer>
-        <Text text="CLick on the rectangle to connect." />
-        {stepObjs}
-        {borders}
-        {connectionObjs}
-        {connectionPreview}
-      </Layer>
-    </Stage>
+    <div
+      onDrop={(e) => {
+        e.preventDefault();
+        // register event position
+        stageRef.current.setPointersPositions(e);
+        // add image
+        const position = e.target.position();
+        setSteps({
+          ...steps,
+        });
+      }}
+      onDragOver={(e) => e.preventDefault()}
+    >
+      <Stage width={window.innerWidth} height={window.innerHeight}>
+        <Layer>
+          <Text text="CLick on the rectangle to connect." />
+          {stepObjs}
+          {borders}
+          {connectionObjs}
+          {connectionPreview}
+        </Layer>
+      </Stage>
+    </div>
   );
 };
 

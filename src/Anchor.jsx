@@ -17,7 +17,7 @@ export function Anchor({ x, y, id, onDragMove, onDragEnd, onDragStart }) {
     <Circle
       x={x}
       y={y}
-      radius={5}
+      radius={3}
       fill='black'
       draggable
       onDragStart={(e) => onDragStart(e, id)}
