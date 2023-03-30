@@ -123,6 +123,7 @@ const App = () => {
         draggable
         onDragMove={(e) => handleStepDrag(e, key)}
         perfectDrawEnabled={false}
+        // _useStrictMode
       />
     );
   });
@@ -135,10 +136,12 @@ const App = () => {
     };
     const points = createConnectionPoints({ x: 0, y: 0 }, lineEnd);
     console.log({ points });
+    console.log({ fromStep, toStep });
+    console.log({ lineEnd });
     return (
       <Arrow
-        x={fromStep.x + SIZE / 2}
-        y={fromStep.y + SIZE / 2}
+        x={fromStep.x}
+        y={fromStep.y}
         points={points}
         stroke="black"
         strokeWidth={3}
