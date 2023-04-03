@@ -100,7 +100,19 @@ const SnappingStage = () => {
       offsetX: 50,
       offsetY: 50,
       id: "rect2"
-    }
+    },
+    {
+        x: 300,
+        y: 300,
+        width: 120,
+        height: 120,
+        fill: Konva.Util.getRandomColor(),
+        draggable: true,
+        name: "object",
+        offsetX: 50,
+        offsetY: 50,
+        id: "rect2"
+      }
   ]);
 
   const checkDeselect = (e) => {

@@ -1,41 +1,141 @@
-import React, { useState } from "react";
-import { render } from "react-dom";
-import { Stage, Layer, Rect, Text, Line, Arrow } from "react-konva";
-import { INITIAL_STATE, SIZE } from "./config";
-import { Border } from "./Border";
+import Konva from "konva";
+import React, { useRef, useState } from "react";
+import {
+  Arrow,
+  Layer,
+  Line,
+  Rect,
+  Stage,
+  Text,
+  Transformer,
+} from "react-konva";
 
-function createConnectionPoints(source, destination) {
-  console.log({ source, destination });
-  return [source.x, source.y, destination.x, destination.y];
-}
+const Rectangle = ({
+  shapeProps,
+  isSelected,
+  onSelect,
+  onChange,
+  onClick,
+  zIndex,
+  onDblClick,
+}) => {
+  const shapeRef = React.useRef();
+  const trRef = React.useRef();
 
-function hasIntersection(position, step) {
-  return !(
-    step.x > position.x ||
-    step.x + SIZE < position.x ||
-    step.y > position.y ||
-    step.y + SIZE < position.y
+  React.useEffect(() => {
+    if (isSelected) {
+      // we need to attach transformer manually
+      trRef.current.nodes([shapeRef.current]);
+      trRef.current.getLayer().batchDraw();
+    }
+  }, [isSelected]);
+
+  return (
+    <React.Fragment>
+      <Rect
+        onClick={onSelect}
+        onDblClick={onDblClick}
+        onTap={onSelect}
+        ref={shapeRef}
+        {...shapeProps}
+        draggable
+        onDragEnd={(e) => {
+          onChange({
+            ...shapeProps,
+            x: e.target.x(),
+            y: e.target.y(),
+          });
+        }}
+        zIndex={zIndex}
+        onTransformEnd={(e) => {
+          // transformer is changing scale of the node
+          // and NOT its width or height
+          // but in the store we have only width and height
+          // to match the data better we will reset scale on transform end
+          const node = shapeRef.current;
+          const scaleX = node.scaleX();
+          const scaleY = node.scaleY();
+
+          // we will reset it back
+          node.scaleX(1);
+          node.scaleY(1);
+          onChange({
+            ...shapeProps,
+            x: node.x(),
+            y: node.y(),
+            // set minimal value
+            width: Math.max(5, node.width() * scaleX),
+            height: Math.max(node.height() * scaleY),
+          });
+        }}
+      />
+      {isSelected && (
+        <Transformer
+          ref={trRef}
+          boundBoxFunc={(oldBox, newBox) => {
+            // limit resize
+            if (newBox.width < 5 || newBox.height < 5) {
+              return oldBox;
+            }
+            return newBox;
+          }}
+        />
+      )}
+    </React.Fragment>
   );
-}
-
-function detectConnection(position, id, steps) {
-  const intersectingStep = Object.keys(steps).find((key) => {
-    return key !== id && hasIntersection(position, steps[key]);
-  });
-  console.log({ intersectingStep });
-  if (intersectingStep) {
-    return intersectingStep;
-  }
-  return null;
-}
+};
 
 const App = () => {
+  const GUIDELINE_OFFSET = 5;
+
   const [selectedStep, setSelectedStep] = useState(null);
-  const [connectionPreview, setConnectionPreview] = useState(null);
-  const [connections, setConnections] = useState([]);
-  const [steps, setSteps] = useState(INITIAL_STATE.steps);
-  const dragUrl = React.useRef();
-  const stageRef = React.useRef();
+  const stageRef = useRef();
+  const [h_lines, setHlines] = useState([]);
+  const [v_lines, setVlines] = useState([]);
+  const [selectedId, selectShape] = useState(null);
+
+  const [connectors, setConnectors] = useState([]);
+
+  const [fromShapeId, setFromShapeId] = useState(null);
+
+  const [rectangles, setRectangles] = useState([
+    {
+      x: 100,
+      y: 100,
+      width: 100,
+      height: 100,
+      fill: Konva.Util.getRandomColor(),
+      draggable: true,
+      name: "object",
+      offsetX: 50,
+      offsetY: 50,
+      id: 1,
+    },
+    {
+      x: 400,
+      y: 120,
+      width: 120,
+      height: 120,
+      fill: Konva.Util.getRandomColor(),
+      draggable: true,
+      name: "object",
+      offsetX: 50,
+      offsetY: 50,
+      id: 2,
+    },
+    {
+      x: 300,
+      y: 320,
+      width: 120,
+      height: 120,
+      fill: Konva.Util.getRandomColor(),
+      draggable: true,
+      name: "object",
+      offsetX: 50,
+      offsetY: 50,
+      id: 3,
+    },
+  ]);
 
   function handleSelection(id) {
     if (selectedStep === id) {
@@ -44,146 +144,331 @@ const App = () => {
       setSelectedStep(id);
     }
   }
-
-  function handleStepDrag(e, key) {
-    const position = e.target.position();
-    setSteps({
-      ...steps,
-      [key]: {
-        ...steps[key],
-        ...position,
-      },
-    });
-  }
-
-  function handleAnchorDragStart(e) {
-    const position = e.target.position();
-    setConnectionPreview(
-      <Line
-        x={position.x}
-        y={position.y}
-        points={createConnectionPoints(position, position)}
-        stroke="black"
-        strokeWidth={2}
-      />
-    );
-  }
-
-  function getMousePos(e) {
-    const position = e.target.position();
-    const stage = e.target.getStage();
-    const pointerPosition = stage.getPointerPosition();
-    return {
-      x: pointerPosition.x - position.x,
-      y: pointerPosition.y - position.y,
-    };
-  }
-
-  function handleAnchorDragMove(e) {
-    const position = e.target.position();
-    const mousePos = getMousePos(e);
-    setConnectionPreview(
-      <Line
-        x={position.x}
-        y={position.y}
-        points={createConnectionPoints({ x: 0, y: 0 }, mousePos)}
-        stroke="black"
-        strokeWidth={2}
-      />
-    );
-  }
-
-  function handleAnchorDragEnd(e, id) {
-    setConnectionPreview(null);
-    const stage = e.target.getStage();
-    const mousePos = stage.getPointerPosition();
-    const connectionTo = detectConnection(mousePos, id, steps);
-    if (connectionTo !== null) {
-      setConnections([
-        ...connections,
-        {
-          to: connectionTo,
-          from: id,
-        },
-      ]);
+  const checkDeselect = (e) => {
+    // deselect when clicked on empty area
+    const clickedOnEmpty = e.target === e.target.getStage();
+    if (clickedOnEmpty) {
+      selectShape(null);
     }
-  }
+  };
 
-  const stepObjs = Object.keys(steps).map((key) => {
-    const { x, y, colour } = steps[key];
-    return (
-      <Rect
-        key={key}
-        x={x}
-        y={y}
-        width={SIZE}
-        height={SIZE}
-        fill={colour}
-        onClick={() => handleSelection(key)}
-        draggable
-        onDragMove={(e) => handleStepDrag(e, key)}
-        perfectDrawEnabled={false}
-        // _useStrictMode
-      />
-    );
-  });
-  const connectionObjs = connections.map((connection) => {
-    const fromStep = steps[connection.from];
-    const toStep = steps[connection.to];
-    const lineEnd = {
-      x: toStep.x - fromStep.x,
-      y: toStep.y - fromStep.y + SIZE / 2,
+  // where can we snap our objects?
+  const getLineGuideStops = (skipShape) => {
+    // we can snap to stage borders and the center of the stage
+    var vertical = [0, stageRef.current.width() / 2, stageRef.current.width()];
+    var horizontal = [
+      0,
+      stageRef.current.height() / 2,
+      stageRef.current.height(),
+    ];
+
+    // and we snap over edges and center of each object on the canvas
+    stageRef.current.find(".object").forEach((guideItem) => {
+      if (guideItem === skipShape) {
+        return;
+      }
+      var box = guideItem.getClientRect({ relativeTo: stageRef.current });
+      // and we can snap to all edges of shapes
+      vertical.push([box.x, box.x + box.width, box.x + box.width / 2]);
+      horizontal.push([box.y, box.y + box.height, box.y + box.height / 2]);
+    });
+    return {
+      vertical: vertical.flat(),
+      horizontal: horizontal.flat(),
     };
+  };
 
-    const points = createConnectionPoints({ x: SIZE, y: SIZE / 2 }, lineEnd);
-    console.log({ points });
-    console.log({ fromStep, toStep });
-    console.log({ lineEnd });
-    return (
-      <Arrow
-        x={fromStep.x}
-        y={fromStep.y}
-        points={points}
-        stroke="black"
-        strokeWidth={3}
-      />
-    );
-  });
-  const borders =
-    selectedStep !== null ? (
-      <Border
-        id={selectedStep}
-        step={steps[selectedStep]}
-        onAnchorDragEnd={(e) => handleAnchorDragEnd(e, selectedStep)}
-        onAnchorDragMove={handleAnchorDragMove}
-        onAnchorDragStart={handleAnchorDragStart}
-      />
-    ) : null;
+  // what points of the object will trigger to snapping?
+  // it can be just center of the object
+  // but we will enable all edges and center
+  const getObjectSnappingEdges = (node) => {
+    var box = node.getClientRect({ relativeTo: stageRef.current });
+    var absPos = node.absolutePosition();
+
+    return {
+      vertical: [
+        {
+          guide: Math.round(box.x),
+          offset: Math.round(absPos.x - box.x),
+          snap: "start",
+        },
+        {
+          guide: Math.round(box.x + box.width / 2),
+          offset: Math.round(absPos.x - box.x - box.width / 2),
+          snap: "center",
+        },
+        {
+          guide: Math.round(box.x + box.width),
+          offset: Math.round(absPos.x - box.x - box.width),
+          snap: "end",
+        },
+      ],
+      horizontal: [
+        {
+          guide: Math.round(box.y),
+          offset: Math.round(absPos.y - box.y),
+          snap: "start",
+        },
+        {
+          guide: Math.round(box.y + box.height / 2),
+          offset: Math.round(absPos.y - box.y - box.height / 2),
+          snap: "center",
+        },
+        {
+          guide: Math.round(box.y + box.height),
+          offset: Math.round(absPos.y - box.y - box.height),
+          snap: "end",
+        },
+      ],
+    };
+  };
+
+  // find all snapping possibilities
+  const getGuides = (lineGuideStops, itemBounds) => {
+    var resultV = [];
+    var resultH = [];
+
+    lineGuideStops.vertical.forEach((lineGuide) => {
+      itemBounds.vertical.forEach((itemBound) => {
+        var diff = Math.abs(lineGuide - itemBound.guide);
+        // if the distance between guild line and object snap point is close we can consider this for snapping
+        if (diff < GUIDELINE_OFFSET) {
+          resultV.push({
+            lineGuide: lineGuide,
+            diff: diff,
+            snap: itemBound.snap,
+            offset: itemBound.offset,
+          });
+        }
+      });
+    });
+
+    lineGuideStops.horizontal.forEach((lineGuide) => {
+      itemBounds.horizontal.forEach((itemBound) => {
+        var diff = Math.abs(lineGuide - itemBound.guide);
+        if (diff < GUIDELINE_OFFSET) {
+          resultH.push({
+            lineGuide: lineGuide,
+            diff: diff,
+            snap: itemBound.snap,
+            offset: itemBound.offset,
+          });
+        }
+      });
+    });
+
+    var guides = [];
+
+    // find closest snap
+    var minV = resultV.sort((a, b) => a.diff - b.diff)[0];
+    var minH = resultH.sort((a, b) => a.diff - b.diff)[0];
+    if (minV) {
+      guides.push({
+        lineGuide: minV.lineGuide,
+        offset: minV.offset,
+        orientation: "V",
+        snap: minV.snap,
+      });
+    }
+    if (minH) {
+      guides.push({
+        lineGuide: minH.lineGuide,
+        offset: minH.offset,
+        orientation: "H",
+        snap: minH.snap,
+      });
+    }
+    return guides;
+  };
+
+  const drawGuides = (guides) => {
+    if (guides) {
+      guides.forEach((lg) => {
+        if (lg.orientation === "H") {
+          let guide = {
+            points: [-6000, 0, 6000, 0],
+            stroke: "rgb(0, 161, 255)",
+            strokeWidth: 1,
+            name: "guid-line",
+            dash: [4, 6],
+            x: 0,
+            y: lg.lineGuide,
+          };
+          setHlines([...guides, guide]);
+        } else if (lg.orientation === "V") {
+          let guide = {
+            points: [0, -6000, 0, 6000],
+            stroke: "rgb(0, 161, 255)",
+            strokeWidth: 1,
+            name: "guid-line",
+            dash: [4, 6],
+            x: lg.lineGuide,
+            y: 0,
+          };
+          setVlines([...guides, guide]);
+        }
+      });
+    }
+  };
+
+  const onDragMove = (e) => {
+    // clear all previous lines on the screen
+    // layer.find('.guid-line').destroy();
+
+    // find possible snapping lines
+    var lineGuideStops = getLineGuideStops(e.target);
+    // find snapping points of current object
+    var itemBounds = getObjectSnappingEdges(e.target);
+
+    // now find where can we snap current object
+    var guides = getGuides(lineGuideStops, itemBounds);
+
+    // do nothing of no snapping
+    if (!guides.length) {
+      return;
+    }
+
+    drawGuides(guides);
+
+    var absPos = e.target.absolutePosition();
+    // now force object position
+    guides.forEach((lg) => {
+      switch (lg.snap) {
+        case "start": {
+          switch (lg.orientation) {
+            case "V": {
+              absPos.x = lg.lineGuide + lg.offset;
+              break;
+            }
+            case "H": {
+              absPos.y = lg.lineGuide + lg.offset;
+              break;
+            }
+            default:
+              break;
+          }
+          break;
+        }
+        case "center": {
+          switch (lg.orientation) {
+            case "V": {
+              absPos.x = lg.lineGuide + lg.offset;
+              break;
+            }
+            case "H": {
+              absPos.y = lg.lineGuide + lg.offset;
+              break;
+            }
+            default:
+              break;
+          }
+          break;
+        }
+        case "end": {
+          switch (lg.orientation) {
+            case "V": {
+              absPos.x = lg.lineGuide + lg.offset;
+              break;
+            }
+            case "H": {
+              absPos.y = lg.lineGuide + lg.offset;
+              break;
+            }
+            default:
+              break;
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    });
+    e.target.absolutePosition(absPos);
+  };
+
+  const onDragEnd = (e) => {
+    setHlines([]);
+    setVlines([]);
+  };
+
   return (
-    <div
-      onDrop={(e) => {
-        e.preventDefault();
-        // register event position
-        stageRef.current.setPointersPositions(e);
-        // add image
-        const position = e.target.position();
-        setSteps({
-          ...steps,
-        });
-      }}
-      onDragOver={(e) => e.preventDefault()}
+    <Stage
+      width={window.innerWidth}
+      height={window.innerHeight}
+      ref={stageRef}
+      onMouseDown={checkDeselect}
+      onTouchStart={checkDeselect}
     >
-      <Stage width={window.innerWidth} height={window.innerHeight/2}>
-        <Layer>
-          <Text text="CLick on the rectangle to connect." />
-          {stepObjs}
-          {borders}
-          {connectionObjs}
-          {connectionPreview}
-        </Layer>
-      </Stage>
-    </div>
+      <Layer onDragMove={(e) => onDragMove(e)} onDragEnd={(e) => onDragEnd(e)}>
+        <Text text="CLick on the rectangle to connect." />
+        {connectors.map((con) => {
+          const from = rectangles.find((s) => s.id === con.from);
+          const to = rectangles.find((s) => s.id === con.to);
+          console.log({ from, to });
+          //   const fromBorderPoints = Konva.Util.getShapeIntersection(from, {
+          //     x: to.x + to.width / 2,
+          //     y: to.y + to.height / 2,
+          //   });
+          //   const toBorderPoints = Konva.Util.getShapeIntersection(to, {
+          //     x: from.x + from.width / 2,
+          //     y: from.y + from.height / 2,
+          //   });
+
+          return (
+            <Arrow
+              key={con.id}
+              points={[
+                from.x + from.width / 2,
+                from.y,
+                to.x,
+                to.y + to.height / 2,
+              ]}
+              stroke="black"
+              zIndex={2}
+            />
+          );
+        })}
+        {rectangles.map((rect, i) => {
+          return (
+            <Rectangle
+              key={i}
+              shapeProps={rect}
+              isSelected={rect.id === selectedId}
+              onSelect={() => {
+                selectShape(rect.id);
+              }}
+              zIndex={1}
+              onChange={(newAttrs) => {
+                const rects = rectangles.slice();
+                rects[i] = newAttrs;
+                setRectangles(rects);
+              }}
+              onDblClick={() => {
+                handleSelection(rect.id);
+                if (fromShapeId) {
+                  const newConnector = {
+                    from: fromShapeId,
+                    to: rect.id,
+                    id: connectors.length,
+                  };
+                  setConnectors(connectors.concat([newConnector]));
+                  setFromShapeId(null);
+                } else {
+                  setFromShapeId(rect.id);
+                }
+              }}
+            />
+          );
+        })}
+        {h_lines.map((item, i) => {
+          return <Line key={i} {...item} />;
+        })}
+        {v_lines.map((item, i) => {
+          return <Line key={i} {...item} />;
+        })}
+      </Layer>
+    </Stage>
   );
 };
 
-export default App
+export default App;

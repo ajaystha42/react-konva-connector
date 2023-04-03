@@ -1,8 +1,82 @@
 import React, { useState } from "react";
 import { render } from "react-dom";
-import { Stage, Layer, Rect, Text, Line, Arrow } from "react-konva";
+import {
+  Stage,
+  Layer,
+  Rect,
+  Text,
+  Line,
+  Arrow,
+  Transformer,
+} from "react-konva";
 import { INITIAL_STATE, SIZE } from "./config";
 import { Border } from "./Border";
+import Konva from "konva";
+
+const Rectangle = ({ shapeProps, isSelected, onSelect, onChange }) => {
+  const shapeRef = React.useRef();
+  const trRef = React.useRef();
+
+  React.useEffect(() => {
+    if (isSelected) {
+      // we need to attach transformer manually
+      trRef.current.nodes([shapeRef.current]);
+      trRef.current.getLayer().batchDraw();
+    }
+  }, [isSelected]);
+
+  return (
+    <React.Fragment>
+      <Rect
+        onClick={onSelect}
+        onTap={onSelect}
+        ref={shapeRef}
+        {...shapeProps}
+        draggable
+        onDragEnd={(e) => {
+          onChange({
+            ...shapeProps,
+            x: e.target.x(),
+            y: e.target.y(),
+          });
+        }}
+        onTransformEnd={(e) => {
+          // transformer is changing scale of the node
+          // and NOT its width or height
+          // but in the store we have only width and height
+          // to match the data better we will reset scale on transform end
+          const node = shapeRef.current;
+          const scaleX = node.scaleX();
+          const scaleY = node.scaleY();
+
+          // we will reset it back
+          node.scaleX(1);
+          node.scaleY(1);
+          onChange({
+            ...shapeProps,
+            x: node.x(),
+            y: node.y(),
+            // set minimal value
+            width: Math.max(5, node.width() * scaleX),
+            height: Math.max(node.height() * scaleY),
+          });
+        }}
+      />
+      {isSelected && (
+        <Transformer
+          ref={trRef}
+          boundBoxFunc={(oldBox, newBox) => {
+            // limit resize
+            if (newBox.width < 5 || newBox.height < 5) {
+              return oldBox;
+            }
+            return newBox;
+          }}
+        />
+      )}
+    </React.Fragment>
+  );
+};
 
 function createConnectionPoints(source, destination) {
   console.log({ source, destination });
@@ -36,6 +110,47 @@ const App = () => {
   const [steps, setSteps] = useState(INITIAL_STATE.steps);
   const dragUrl = React.useRef();
   const stageRef = React.useRef();
+  const [h_lines, setHlines] = useState([]);
+  const [v_lines, setVlines] = useState([]);
+  const [selectedId, selectShape] = React.useState(null);
+
+  const [rectangles, setRectangles] = useState([
+    {
+      x: 100,
+      y: 100,
+      width: 100,
+      height: 100,
+      fill: Konva.Util.getRandomColor(),
+      draggable: true,
+      name: "object",
+      offsetX: 50,
+      offsetY: 50,
+      id: "rect1",
+    },
+    {
+      x: 120,
+      y: 120,
+      width: 120,
+      height: 120,
+      fill: Konva.Util.getRandomColor(),
+      draggable: true,
+      name: "object",
+      offsetX: 50,
+      offsetY: 50,
+      id: "rect2",
+    },
+  ]);
+
+  const checkDeselect = (e) => {
+    // deselect when clicked on empty area
+    const clickedOnEmpty = e.target === e.target.getStage();
+    if (clickedOnEmpty) {
+      selectShape(null);
+    }
+  };
+
+  const SCENE_BASE_WIDTH = 500;
+  const SCENE_BASE_HEIGHT = 500;
 
   function handleSelection(id) {
     if (selectedStep === id) {
@@ -159,30 +274,36 @@ const App = () => {
         onAnchorDragStart={handleAnchorDragStart}
       />
     ) : null;
+
+  console.log({ selectedId });
   return (
-    <div
-      onDrop={(e) => {
-        e.preventDefault();
-        // register event position
-        stageRef.current.setPointersPositions(e);
-        // add image
-        const position = e.target.position();
-        setSteps({
-          ...steps,
-        });
-      }}
-      onDragOver={(e) => e.preventDefault()}
-    >
-      <Stage width={window.innerWidth} height={window.innerHeight}>
-        <Layer>
-          <Text text="CLick on the rectangle to connect." />
-          {stepObjs}
-          {borders}
-          {connectionObjs}
-          {connectionPreview}
-        </Layer>
-      </Stage>
-    </div>
+    <Stage width={window.innerWidth} height={window.innerHeight}>
+      <Layer>
+        <Text text="CLick on the rectangle to connect." />
+        {/* {stepObjs} */}
+        {rectangles.map((rect, i) => {
+          console.log({ rect, i });
+          return (
+            <Rectangle
+              key={i}
+              shapeProps={rect}
+              isSelected={rect.id === selectedId}
+              onSelect={() => {
+                selectShape(rect.id);
+              }}
+              onChange={(newAttrs) => {
+                const rects = rectangles.slice();
+                rects[i] = newAttrs;
+                setRectangles(rects);
+              }}
+            />
+          );
+        })}
+        {/* {borders}
+        {connectionObjs}
+        {connectionPreview} */}
+      </Layer>
+    </Stage>
   );
 };
 
