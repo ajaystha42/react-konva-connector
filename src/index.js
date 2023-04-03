@@ -8,7 +8,8 @@ const root = createRoot(rootElement);
 
 root.render(
   <StrictMode>
-    <App />
-    <SnappingStage />
+    <App isRect={true} />
+    <App isRect={false} />
+    {/* <SnappingStage /> */}
   </StrictMode>
 );

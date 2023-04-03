@@ -2,6 +2,7 @@ import Konva from "konva";
 import React, { useRef, useState } from "react";
 import {
   Arrow,
+  Circle,
   Layer,
   Line,
   Rect,
@@ -18,10 +19,11 @@ const Rectangle = ({
   onClick,
   zIndex,
   onDblClick,
+  isRect,
 }) => {
   const shapeRef = React.useRef();
   const trRef = React.useRef();
-
+  console.log({ isRect });
   React.useEffect(() => {
     if (isSelected) {
       // we need to attach transformer manually
@@ -32,43 +34,83 @@ const Rectangle = ({
 
   return (
     <React.Fragment>
-      <Rect
-        onClick={onSelect}
-        onDblClick={onDblClick}
-        onTap={onSelect}
-        ref={shapeRef}
-        {...shapeProps}
-        draggable
-        onDragEnd={(e) => {
-          onChange({
-            ...shapeProps,
-            x: e.target.x(),
-            y: e.target.y(),
-          });
-        }}
-        zIndex={zIndex}
-        onTransformEnd={(e) => {
-          // transformer is changing scale of the node
-          // and NOT its width or height
-          // but in the store we have only width and height
-          // to match the data better we will reset scale on transform end
-          const node = shapeRef.current;
-          const scaleX = node.scaleX();
-          const scaleY = node.scaleY();
+      {isRect ? (
+        <Rect
+          onClick={onSelect}
+          onDblClick={onDblClick}
+          onTap={onSelect}
+          ref={shapeRef}
+          {...shapeProps}
+          draggable
+          onDragMove={(e) => {
+            onChange({
+              ...shapeProps,
+              x: e.target.x(),
+              y: e.target.y(),
+            });
+          }}
+          zIndex={zIndex}
+          onTransformEnd={(e) => {
+            // transformer is changing scale of the node
+            // and NOT its width or height
+            // but in the store we have only width and height
+            // to match the data better we will reset scale on transform end
+            const node = shapeRef.current;
+            const scaleX = node.scaleX();
+            const scaleY = node.scaleY();
 
-          // we will reset it back
-          node.scaleX(1);
-          node.scaleY(1);
-          onChange({
-            ...shapeProps,
-            x: node.x(),
-            y: node.y(),
-            // set minimal value
-            width: Math.max(5, node.width() * scaleX),
-            height: Math.max(node.height() * scaleY),
-          });
-        }}
-      />
+            // we will reset it back
+            node.scaleX(1);
+            node.scaleY(1);
+            onChange({
+              ...shapeProps,
+              x: node.x(),
+              y: node.y(),
+              // set minimal value
+              width: Math.max(5, node.width() * scaleX),
+              height: Math.max(node.height() * scaleY),
+            });
+          }}
+        />
+      ) : (
+        <Circle
+          onClick={onSelect}
+          onDblClick={onDblClick}
+          onTap={onSelect}
+          ref={shapeRef}
+          {...shapeProps}
+          //   draggable
+          onDragMove={(e) => {
+            onChange({
+              ...shapeProps,
+              x: e.target.x(),
+              y: e.target.y(),
+            });
+          }}
+          onTransformEnd={(e) => {
+            // transformer is changing scale of the node
+            // and NOT its width or height
+            // but in the store we have only width and height
+            // to match the data better we will reset scale on transform end
+            const node = shapeRef.current;
+            const scaleX = node.scaleX();
+            const scaleY = node.scaleY();
+
+            // we will reset it back
+            node.scaleX(1);
+            node.scaleY(1);
+            onChange({
+              ...shapeProps,
+              x: node.x(),
+              y: node.y(),
+              // set minimal value
+              width: Math.max(5, node.width() * scaleX),
+              height: Math.max(node.height() * scaleY),
+            });
+          }}
+        />
+      )}
+
       {isSelected && (
         <Transformer
           ref={trRef}
@@ -85,7 +127,7 @@ const Rectangle = ({
   );
 };
 
-const App = () => {
+const App = ({ isRect }) => {
   const GUIDELINE_OFFSET = 5;
 
   const [selectedStep, setSelectedStep] = useState(null);
@@ -107,8 +149,8 @@ const App = () => {
       fill: Konva.Util.getRandomColor(),
       draggable: true,
       name: "object",
-      offsetX: 50,
-      offsetY: 50,
+      //   offsetX: 50,
+      //   offsetY: 50,
       id: 1,
     },
     {
@@ -119,8 +161,8 @@ const App = () => {
       fill: Konva.Util.getRandomColor(),
       draggable: true,
       name: "object",
-      offsetX: 50,
-      offsetY: 50,
+      //   offsetX: 50,
+      //   offsetY: 50,
       id: 2,
     },
     {
@@ -131,8 +173,8 @@ const App = () => {
       fill: Konva.Util.getRandomColor(),
       draggable: true,
       name: "object",
-      offsetX: 50,
-      offsetY: 50,
+      //   offsetX: 50,
+      //   offsetY: 50,
       id: 3,
     },
   ]);
@@ -394,13 +436,19 @@ const App = () => {
   return (
     <Stage
       width={window.innerWidth}
-      height={window.innerHeight}
+      height={window.innerHeight / 2}
       ref={stageRef}
       onMouseDown={checkDeselect}
       onTouchStart={checkDeselect}
     >
       <Layer onDragMove={(e) => onDragMove(e)} onDragEnd={(e) => onDragEnd(e)}>
-        <Text text="CLick on the rectangle to connect." />
+        <Text
+          text={
+            isRect
+              ? "Stage 1: Double click on the rectangle to connect."
+              : "Stage 2: Double click on the circle to connect."
+          }
+        />
         {connectors.map((con) => {
           const from = rectangles.find((s) => s.id === con.from);
           const to = rectangles.find((s) => s.id === con.to);
@@ -413,24 +461,55 @@ const App = () => {
           //     x: from.x + from.width / 2,
           //     y: from.y + from.height / 2,
           //   });
+          const dx = from.x - to.x;
+          const dy = from.y - to.y;
+          let angle = Math.atan2(-dy, dx);
 
+          const radius = 0;
+
+          const arrowStart = {
+            x: from.x + -radius * Math.cos(angle + Math.PI),
+            y: from.y + radius * Math.sin(angle + Math.PI),
+          };
+
+          const arrowEnd = {
+            x: to.x + -radius * Math.cos(angle),
+            y: to.y + radius * Math.sin(angle),
+          };
+          const arrowMiddle = {
+            x: (arrowStart.x + arrowEnd.x) / 2,
+            y: (arrowStart.y + arrowEnd.y) / 2,
+          };
+          const points = isRect
+            ? [
+                from.x + from.width,
+                from.y + from.height / 2,
+                to.x,
+                to.y + to.height / 2,
+              ]
+            : [
+                arrowStart.x,
+                arrowStart.y,
+                // arrowMiddle.x,
+                // arrowMiddle.y,
+                arrowEnd.x,
+                arrowEnd.y,
+              ];
           return (
             <Arrow
               key={con.id}
-              points={[
-                from.x + from.width / 2,
-                from.y,
-                to.x,
-                to.y + to.height / 2,
-              ]}
+              points={points}
               stroke="black"
               zIndex={2}
+              strokeWidth={1}
+              pointerWidth={6}
             />
           );
         })}
         {rectangles.map((rect, i) => {
           return (
             <Rectangle
+              isRect={isRect}
               key={i}
               shapeProps={rect}
               isSelected={rect.id === selectedId}
